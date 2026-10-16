@@ -17,23 +17,40 @@ SELECTION=$(
         --prompt="Select Theme For Ashton: " \
         --height=40% \
         --layout=reverse \
-        --border # settings for fzf
+        --border
 )
 
 # Exit if nothing selected
 [ -z "$SELECTION" ] && exit 0
 
-# Apply wallpaper
-awww img "$SELECTION" \
-    --transition-type wipe \
-    --transition-step 120 \
-    --transition-fps 165
+# Generate colors FIRST (-n: don't let pywal set the wallpaper, awww does that)
+if command -v wal >/dev/null 2>&1; then
+    wal -i "$SELECTION" -n -s -q
+    pkill -USR1 kitty
+echo "file:"; grep -E "^(background|foreground|color2) " ~/.cache/wal/colors-kitty.conf
+for sock in /tmp/kitty-*; do
+    [ -S "$sock" ] || continue
+    echo "$sock:"
+    kitten @ --to "unix:$sock" get-colors | grep -E "^(background|foreground|color2) "
+done
 
-# Generate terminal/theme colors
-if command -v wal >/dev/null 2>&1; then # checks if pywal is installed
-
-    wal -i "$SELECTION" -q # generate colors of the wallpaper
+    # rofi background (first frame for gifs)
+    if file --mime-type -b "$SELECTION" | grep -q "gif"; then
+        magick "${SELECTION}[0]" /tmp/rofi_bg.png 2>/dev/null
+    else
+        cp -f "$SELECTION" /tmp/rofi_bg.png 2>/dev/null
+    fi
 
     # Refresh Rofi theme cache
     touch "$HOME/.cache/wal/colors-rofi-dark.rasi"
+
+    # Update Hyprland borders
+    hyprctl reload >/dev/null
 fi
+
+# Apply wallpaper
+awww img "$SELECTION" \
+    --transition-type grow \
+    --transition-pos center \
+    --transition-duration 0.6 \
+    --transition-fps 165 &
